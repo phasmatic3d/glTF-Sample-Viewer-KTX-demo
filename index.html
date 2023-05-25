@@ -503,8 +503,6 @@
 
                                                 <b-switch v-model="selectedCompressionUASTC_Rdo_DonotFavorSimplerModes" v-stream:input="compressedUASTC_Rdo_DonotFavorSimplerModesChanged$">Do not favor simpler modes
                                                 </b-switch>
-                                                <b-switch v-model="selectedCompressionUASTC_Rdo_NoMultithreading" v-stream:input="compressedUASTC_Rdo_NoMultithreadingChanged$">No multithreading 
-                                                </b-switch>
                                             </div>    
                                         </b-field>
                                     </div>
@@ -557,9 +555,6 @@
                                                     </b-slider>
                                                 </b-field>
 
-                                                <b-switch v-model="selectedCompressionETC1S_NormalMap" v-stream:input="compressionETC1S_NormalMapChanged$">Normal Map 
-                                                </b-switch>
-
                                                 <b-switch v-model="selectedCompressionETC1S_NoEndpointRdo" v-stream:input="compressionETC1S_NoEndpointRdoChanged$">No Endpoint RDO 
                                                 </b-switch>
 
@@ -599,7 +594,7 @@
                                 </div>
                                 
                                 </br>
-                                <button v-stream:click="compressTextures$" type="button" class="button is-rounded" style="width: -webkit-fill-available;">
+                                <button v-stream:click="compressTextures$" :disabled="compressionStarted && !compressionCompleted" type="button" class="button is-rounded" style="width: -webkit-fill-available;">
                                     <i class="fa fa-cogs downloadIcon"></i> {{ compressionBtnTitle }}
                                 </button> 
 

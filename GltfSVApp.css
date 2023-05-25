@@ -15835,6 +15835,16 @@ button.button {
   height: 2em;
 }
 
+.button:disabled,
+.button[disabled] {
+  pointer-events: none;
+  background-color: #87c540;
+  border-color: #f5f5f5;
+  border-width: 0em;
+  color: #f2f2f2;
+  opacity: 0.95;
+}
+
 .is-dropAreaCard {
   justify-content: center;
   align-items: center;
