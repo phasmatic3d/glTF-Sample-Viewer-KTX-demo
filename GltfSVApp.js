@@ -26576,12 +26576,11 @@ class UIModel
         // GSV-KTX
         this.texturesSelectionType = app.texturesSelectionChanged$.pipe(pluck("event", "msg"));
         this.compressionSelectionType = app.compressionSelectionChanged$.pipe(pluck("event", "msg"));
-        this.compressionEncodingType = app.compressionEncodingSelectionChanged$.pipe(pluck("event", "msg"));
         this.compressionResolutionDownscale = app.compressionResolutionSelectionChanged$.pipe(pluck("event", "msg"));
         this.compressionQualityJPEG = app.compressionQualityJPEGChanged$.pipe(pluck("event", "msg"));
         this.compressionQualityPNG = app.compressionQualityPNGChanged$.pipe(pluck("event", "msg"));
         this.compressionQualityWEBP = app.compressionQualityWEBPChanged$.pipe(pluck("event", "msg"));
-        this.compressedPreviewMode = app.compressedPreviewModeChanged$.pipe(pluck("event", "msg"));
+        this.compressedPreviewMode = app.$watchAsObservable('compressionOnly').pipe(map( ({ newValue, oldValue }) => newValue));
         this.comparisonViewMode = app.comparisonViewChanged$.pipe(pluck("event", "msg"));
         
         // KTX
@@ -26979,7 +26978,6 @@ class UIModel
                 this.app.previewImageSlider = 0.5;
                 this.app.compressedKTX = false;
 
-                this.app.selectedCompressionEncoding = "UASTC";
                 this.app.selectedCompressionUASTC_Flags = "DEFAULT";
                 this.app.selectedCompressionUASTC_Rdo = false;
                 this.app.selectedCompressionUASTC_Rdo_QualityScalar = 1.0;
@@ -27020,6 +27018,16 @@ class UIModel
         this.app.compressionStarted = (i < total);
         this.app.progressValue = (i/total)*100;
         this.app.compressionBtnTitle = "Compressing Textures (" + i + "/" + total + ")";
+    }
+
+    updateEncodingKTX(value)
+    {
+        this.app.selectedCompressionEncoding = (value === "Color") ? "ETC1S" : "UASTC";
+    }
+
+    updateImageSlider(value)
+    {
+        this.app.previewImageSlider = value;
     }
 
     disabledAnimations(disabledAnimationsObservable)
@@ -55423,6 +55431,16 @@ Vue$2.component('texture-details', {
             this.name.push('Compare');
         }
     },
+    watch: { 
+        data: function () {
+            this.pressed = [];
+            this.name =  [];
+            for(let i=0; i<this.data.length; i++) {
+                this.pressed.push(false);
+                this.name.push('Compare');
+            }
+        },
+    },
     methods: {
         togglePressed: function(selected) {
             for(let i=0; i<this.data.length; i++) {
@@ -55454,7 +55472,7 @@ const app = new Vue$2({
         'compressionETC1S_NoEndpointRdoChanged$', 'compressionETC1S_NoSelectorRdoChanged$',
         'compressionUASTC_Rdo_QualityScalarChanged$', 'compressionUASTC_Rdo_DictionarySizeChanged$', 'compressionUASTC_Rdo_MaxSmoothBlockErrorScaleChanged$',
         'compressionUASTC_Rdo_MaxSmoothBlockStandardDeviationChanged$', 'compressionQualityPNGChanged$', 'compressionQualityWEBPChanged$',
-        'compressionQualityJPEGChanged$', 'compressedPreviewModeChanged$', 'compressTextures$', 'previewImageSliderChanged$',
+        'compressionQualityJPEGChanged$', 'compressTextures$', 'previewImageSliderChanged$',
         'gltfExport$', 'ktxjsonExport$'],
     data() {
         return {
@@ -55567,6 +55585,12 @@ const app = new Vue$2({
             volumeEnabledPrefState: true,
         };
     },
+    created() {
+        window.addEventListener("keydown", this.keyListener);
+    },
+    destroyed() {
+        window.removeEventListener("keydown", this.keyListener);
+    },
     updated: function()
     {
         if(this.texturesUpdated){
@@ -55606,6 +55630,10 @@ const app = new Vue$2({
     },
     methods:
     {
+        keyListener(event) {
+            if (event.key === "c") 
+                this.compressionOnly = !this.compressionOnly;
+        },
         toggleFullscreen() {
             if(this.fullscreen) {
                 app.show();
@@ -65387,6 +65415,8 @@ async function main()
             )
                 document.getElementById('image-' + i).checked = true;
         }
+        uiModel.updateEncodingKTX(texturesSelectionType);
+        state.compressorParameters.compressionEncoding = (texturesSelectionType === "Color") ? "ETC1S" : "UASTC";
     });
 
     uiModel.compressionSelectionType.subscribe( compressionSelectionType => {
@@ -65491,6 +65521,7 @@ async function main()
     // Preview Compressed
     uiModel.compressedPreviewMode.subscribe( compressedPreviewMode => {
         state.compressorParameters.sliderPosition = compressedPreviewMode? 0.0 : 1.0;
+        uiModel.updateImageSlider(state.compressorParameters.sliderPosition);
     });
     listenForRedraw(uiModel.compressedPreviewMode);
     // preview slider
@@ -65560,7 +65591,6 @@ async function main()
             basisu_options.uastcRDOMaxSmoothBlockStdDev = targetKTX2_UASTC_RDO_maxSmoothBlockStandardDeviation;
             basisu_options.uastcRDODontFavorSimplerModes = targetKTX2_UASTC_RDO_donotFavorSimplerModes;
             
-            console.log(basisu_options);
             options.basisu_options = basisu_options;
         }
         else if(state.compressorParameters.compressionType === "JPEG"){
@@ -65588,8 +65618,8 @@ async function main()
             const width = state.gltf.images[i].image.width;
             const height = state.gltf.images[i].image.height;
             
-            const scaled_width  = scale > 1? width/scale : width;
-            const scaled_height = scale > 1? height/scale : height;
+            const scaled_width  = scale > 1? Math.max(width/scale, 1) : width;
+            const scaled_height = scale > 1? Math.max(height/scale, 1) : height;
 
             await state.gltf.images[i].compressImage(targetMimeType, scaled_width, scaled_height, options, state.gltf, () => uiModel.updateTextureCompressionButton(index+1, state.compressorParameters.selectedImages.length));
         }
@@ -65864,6 +65894,58 @@ async function main()
         }
     });
     
+    const ktxjsonExportObservable = uiModel.ktxjsonValuesExport.pipe( map(_ => {
+        const gltf = state.gltf;
+        const ktx = gltf.ktxDecoder;
+        const images = state.compressorParameters.processedImages;
+        const params = state.compressorParameters;
+        const commands = [];
+        const scale  = parseInt(state.compressorParameters.resolutionDownscale.replace(/\D/g, ""));
+        
+        images.forEach(function (index) {
+            const image = gltf.images[index];
+            const slash_index  = image.uri.lastIndexOf("/"); 
+            const point_index  = image.uri.lastIndexOf("."); 
+            (point_index < 0) ? "" : image.uri.substring(point_index + 1);
+            const input = (slash_index < 0) ? image.uri : image.uri.substring(slash_index + 1);
+            const output = ((slash_index < 0 || point_index < 0) ? image.uri : image.uri.substring(slash_index + 1, point_index)) + '.ktx2';
+            let command = '';
+            command += 'toktx';
+            command += ' --t2';
+            command += ' --2d';
+            command += ' --encode ' + (params.compressionEncoding === 'UASTC' ? 'uastc' : 'etc1s');
+            if (params.compressionEncoding === 'UASTC') {
+                command += ' --uastc_quality ' + ktx.stringToUastcFlags(params.compressionUASTC_Flags);
+                if (params.compressionUASTC_Rdo) {
+                    command += ' --uastc_rdo_l ' + params.compressionUASTC_Rdo_QualityScalar;
+                    command += ' --uastc_rdo_d ' + params.compressionUASTC_Rdo_DictionarySize;
+                    command += ' --uastc_rdo_b ' + params.compressionUASTC_Rdo_MaxSmoothBlockErrorScale;
+                    command += ' --uastc_rdo_s ' + params.compressionUASTC_Rdo_MaxSmoothBlockStandardDeviation;
+                    if (params.compressionUASTC_Rdo_DonotFavorSimplerModes) command += ' --uastc_rdo_f';
+                }
+            } else {
+                command += ' --clevel ' + params.compressionETC1S_CompressionLevel;
+                command += ' --qlevel ' + params.compressionETC1S_QualityLevel;
+                command += ' --max_endpoints ' + params.compressionETC1S_MaxEndPoints;
+                command += ' --endpoint_rdo_threshold ' + params.compressionETC1S_EndpointRdoThreshold;
+                command += ' --max_selectors ' + params.compressionETC1S_MaxSelectors;
+                command += ' --selector_rdo_threshold ' + params.compressionETC1S_SelectorRdoThreshold;
+                if (params.compressionETC1S_NoEndpointRdo) command += ' --no_endpoint_rdo';
+                if (params.compressionETC1S_NoSelectorRdo) command += ' --no_selector_rdo';
+            }
+            if (scale > 1) command += ' --resize ' + image.compressedImage.width + 'x' + image.compressedImage.height;
+            command += ' ' + output;
+            command += ' ' + input;
+            commands.push(command);
+        });
+        return {commands: commands};
+    }));
+    ktxjsonExportObservable.subscribe( async (commands) => {
+        const json_commands = JSON.stringify(commands);
+        const dataURL = 'data:text/plain;charset=utf-8,' +  encodeURIComponent(json_commands);
+        downloadDataURL("toktx.json", dataURL);
+    });
+
     // reset the previewing to 3D and preview texture index on model load
     gltfLoadedMulticast.subscribe(_ => {
         state.compressorParameters.previewCompressed = false;
