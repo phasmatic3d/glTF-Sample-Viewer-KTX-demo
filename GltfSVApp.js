@@ -2502,6 +2502,8 @@ class GltfState
             /** Set the compression quality KTX2 - UASTC */
             compressionUASTC_Flags: "DEFAULT",
             compressionUASTC_Rdo: false,
+            compressionUASTC_Rdo_Algorithm: "Zstd",
+            compressionUASTC_Rdo_Level: 18,
             compressionUASTC_Rdo_QualityScalar: 1.0,
             compressionUASTC_Rdo_DictionarySize: 4096,
             compressionUASTC_Rdo_MaxSmoothBlockErrorScale: 10.0,
@@ -26587,6 +26589,8 @@ class UIModel
         this.compressionEncoding = app.compressionEncodingSelectionChanged$.pipe(pluck("event", "msg"));
         this.compressionUASTC_Flags = app.compressedUASTC_FlagsChanged$.pipe(pluck("event", "msg"));
         this.compressionUASTC_Rdo = app.compressedUASTC_RdoChanged$.pipe(pluck("event", "msg"));
+        this.compressionUASTC_Rdo_Algorithm = app.compressionUASTC_Rdo_AlgorithmSelectionChanged$.pipe(pluck("event", "msg"));
+        this.compressionUASTC_Rdo_Level = app.compressionUASTC_Rdo_LevelChanged$.pipe(pluck("event", "msg"));
         this.compressionUASTC_Rdo_QualityScalar = app.compressionUASTC_Rdo_QualityScalarChanged$.pipe(pluck("event", "msg"));
         this.compressionUASTC_Rdo_DictionarySize = app.compressionUASTC_Rdo_DictionarySizeChanged$.pipe(pluck("event", "msg"));
         this.compressionUASTC_Rdo_MaxSmoothBlockErrorScale = app.compressionUASTC_Rdo_MaxSmoothBlockErrorScaleChanged$.pipe(pluck("event", "msg"));
@@ -26957,8 +26961,8 @@ class UIModel
         statisticsUpdateObservable.subscribe(
             data => {
                 let compressionStatistics = {};
-                compressionStatistics["Original"] = data.texturesSize.toFixed(2) + " mb";
-                compressionStatistics["Compressed"] = "";
+                compressionStatistics["Before"] = data.texturesSize.toFixed(2) + " mb";
+                compressionStatistics["After"] = "";
                 this.app.compressionStatistics = compressionStatistics;
                 this.app.texturesStatistics = data.textures;
                 this.app.texturesUpdated = true;
@@ -26980,6 +26984,7 @@ class UIModel
 
                 this.app.selectedCompressionUASTC_Flags = "DEFAULT";
                 this.app.selectedCompressionUASTC_Rdo = false;
+                this.app.selectedCompressionUASTC_Rdo_Level = 18;
                 this.app.selectedCompressionUASTC_Rdo_QualityScalar = 1.0;
                 this.app.selectedCompressionUASTC_Rdo_DictionarySize = 4096;
                 this.app.selectedCompressionUASTC_Rdo_MaxSmoothBlockErrorScale = 10.0;
@@ -27003,11 +27008,12 @@ class UIModel
         statisticsUpdateObservable.subscribe(
             data => {
                 let done = data.textures.some(texture => texture.isCompleted);
-                this.app.compressionStatistics["Compressed"] = done ? (data.texturesSize.toFixed(2) + " mb") : "";
+                this.app.compressionStatistics["After"] = done ? (data.texturesSize.toFixed(2) + " mb") : "";
                 this.app.texturesStatistics = data.textures;
                 this.app.compressionCompleted = done;
                 this.app.compressedKTX |= this.app.selectedCompressionType === "KTX2";
                 this.app.compressionBtnTitle = "Compress Textures";
+                this.app.scrollIntoView = true;
             },
         );
     }
@@ -27023,6 +27029,33 @@ class UIModel
     updateEncodingKTX(value)
     {
         this.app.selectedCompressionEncoding = (value === "Color") ? "ETC1S" : "UASTC";
+    }
+
+    updateSlider(index, previewMode)
+    {
+        this.app.compressionBefore = (previewMode === GltfState.CompressionComparison.PREVIEW_2D) ? 'Before\n (' + this.app.texturesStatistics[index].format + ')' : "Before";
+
+        this.app.compressionAfter  = "After";
+        if(previewMode === GltfState.CompressionComparison.PREVIEW_2D)
+        {
+            this.app.compressionAfter = 'After\n ('  + this.app.texturesStatistics[index].formatCompressed;
+
+            if(this.app.texturesStatistics[index].formatCompressed == "ktx2")
+            {
+                this.app.compressionAfter += " + " + this.app.selectedCompressionEncoding;
+                if(this.app.selectedCompressionEncoding === "UASTC")
+                {
+                    if(this.app.selectedCompressionUASTC_Rdo)
+                        this.app.compressionAfter += " + RDO";
+                    this.app.compressionAfter += " + " + this.app.selectedCompressionUASTC_Rdo_Algorithm; 
+                }
+                else {
+                    this.app.compressionAfter += " + BasisLZ";
+                }
+            }
+
+            this.app.compressionAfter += ')';
+        }
     }
 
     updateImageSlider(value)
@@ -55465,8 +55498,8 @@ const app = new Vue$2({
         'addEnvironment$', 'colorChanged$', 'environmentRotationChanged$', 'animationPlayChanged$', 'selectedAnimationsChanged$',
         'variantChanged$', 'exposureChanged$', "clearcoatChanged$", "sheenChanged$", "transmissionChanged$",
         'cameraExport$', 'captureCanvas$','iblIntensityChanged$', 'comparisonViewChanged$',
-        'texturesSelectionChanged$', 'compressionSelectionChanged$', 'compressionEncodingSelectionChanged$', 'compressionResolutionSelectionChanged$',
-        'compressedUASTC_FlagsChanged$', 'compressedUASTC_RdoChanged$', 'compressedUASTC_Rdo_DonotFavorSimplerModesChanged$',
+        'texturesSelectionChanged$', 'compressionSelectionChanged$', 'compressionUASTC_Rdo_AlgorithmSelectionChanged$', 'compressionEncodingSelectionChanged$', 'compressionResolutionSelectionChanged$',
+        'compressedUASTC_FlagsChanged$', 'compressedUASTC_RdoChanged$', 'compressionUASTC_Rdo_LevelChanged$', 'compressedUASTC_Rdo_DonotFavorSimplerModesChanged$',
         'compressionETC1S_CompressionLevelChanged$', 'compressionETC1S_QualityLevelChanged$', 'compressionETC1S_MaxEndPointsChanged$', 
         'compressionETC1S_EndpointRdoThresholdChanged$', 'compressionETC1S_MaxSelectorsChanged$', 'compressionETC1S_SelectorRdoThresholdChanged$',
         'compressionETC1S_NoEndpointRdoChanged$', 'compressionETC1S_NoSelectorRdoChanged$',
@@ -55519,9 +55552,16 @@ const app = new Vue$2({
             compressionQualityWEBP: 80.0,
             previewImageSlider: 0.5,
 
+            compressionBefore: "Before",
+            compressionAfter: "After",
+
+            compressionUASTC_Rdo_Algorithms: [{title: "Zstd"}, {title: "Zlib"}],
             compressionUASTC_Flags: [{title: "FASTEST"}, {title: "FASTER"}, {title: "DEFAULT"}, {title: "SLOWER"}, {title: "SLOWEST"}],
             selectedCompressionUASTC_Flags: "DEFAULT",
             selectedCompressionUASTC_Rdo: false,
+            selectedCompressionUASTC_Rdo_Algorithm: "Zstd",
+            
+            selectedCompressionUASTC_Rdo_Level: 18,
             selectedCompressionUASTC_Rdo_QualityScalar: 1.0,
             selectedCompressionUASTC_Rdo_DictionarySize: 4096,
             selectedCompressionUASTC_Rdo_MaxSmoothBlockErrorScale: 10.0,
@@ -55538,6 +55578,7 @@ const app = new Vue$2({
             selectedCompressionETC1S_NoSelectorRdo: false,
 
             progressValue: 5,
+            scrollIntoView: false,
 
             selectedModel: "DamagedHelmet",
             selectedFlavour: "",
@@ -55598,6 +55639,12 @@ const app = new Vue$2({
             for(let i=0; i<this.texturesStatistics.length; i++)        
                 document.getElementById('container_img_' + i).appendChild(this.texturesStatistics[i].img);
         }
+        
+        var divObj = document.getElementById("targetElement");
+        if(divObj && this.scrollIntoView){
+            this.scrollIntoView = false;
+            divObj.scrollIntoView({ behavior: 'smooth' });
+        }      
     },
     mounted: function()
     {
@@ -55618,7 +55665,7 @@ const app = new Vue$2({
             // Code that will run only after the
             // entire view has been rendered
             var a = document.createElement('a');
-            a.href = "https://github.com/KhronosGroup/glTF-Sample-Viewer";
+            a.href = "https://github.com/KhronosGroup/glTF-Compressor";
             var img = document.createElement('img');
             img.src ="assets/ui/GitHub-Mark-Light-32px.png";
             img.style.width = "22px";
@@ -65437,6 +65484,10 @@ async function main()
         state.compressorParameters.compressionQualityWEBP = compressionQualityWEBP;
     });
 
+    uiModel.compressionUASTC_Rdo_Algorithm.subscribe( compressionUASTC_Rdo_Algorithm => {
+        state.compressorParameters.compressionUASTC_Rdo_Algorithm = compressionUASTC_Rdo_Algorithm;
+    });
+
     uiModel.compressionEncoding.subscribe( compressionEncoding => {
         state.compressorParameters.compressionEncoding = compressionEncoding;
     });
@@ -65447,6 +65498,10 @@ async function main()
 
     uiModel.compressionUASTC_Rdo.subscribe( compressionUASTC_Rdo => {
         state.compressorParameters.compressionUASTC_Rdo = compressionUASTC_Rdo;
+    });
+
+    uiModel.compressionUASTC_Rdo_Level.subscribe( compressionUASTC_Rdo_Level => {
+        state.compressorParameters.compressionUASTC_Rdo_Level = compressionUASTC_Rdo_Level;
     });
 
     uiModel.compressionUASTC_Rdo_QualityScalar.subscribe( compressionUASTC_Rdo_QualityScalar => {
@@ -65515,6 +65570,8 @@ async function main()
             state.compressorParameters.previewTextureIndex = index;
             state.compressorParameters.previewTextureZoom = {left: 0, right: 1, bottom: 0, top: 1};
         }
+
+        uiModel.updateSlider(index, state.compressorParameters.previewMode);
     });
     listenForRedraw(uiModel.comparisonViewMode);
 
@@ -65526,7 +65583,7 @@ async function main()
     listenForRedraw(uiModel.compressedPreviewMode);
     // preview slider
     uiModel.previewImageSlider.subscribe( previewImageSlider => {
-        state.compressorParameters.sliderPosition = previewImageSlider;
+        state.compressorParameters.sliderPosition = previewImageSlider;        
     });
     listenForRedraw(uiModel.previewImageSlider);
     // Compress textures
@@ -65552,6 +65609,8 @@ async function main()
             const targetKTX2_encoding = state.compressorParameters.compressionEncoding;
             const targetKTX2_UASTC_flags = state.compressorParameters.compressionUASTC_Flags;
             const targetKTX2_UASTC_RDO = state.compressorParameters.compressionUASTC_Rdo;
+            state.compressorParameters.compressionUASTC_Rdo_Algorithm;
+            state.compressorParameters.compressionUASTC_Rdo_Level; 
             const targetKTX2_UASTC_RDO_quality = state.compressorParameters.compressionUASTC_Rdo_QualityScalar;
             const targetKTX2_UASTC_RDO_dictionarySize = state.compressorParameters.compressionUASTC_Rdo_DictionarySize;
             const targetKTX2_UASTC_RDO_maxSmoothBlockErrorScale = state.compressorParameters.compressionUASTC_Rdo_MaxSmoothBlockErrorScale;
@@ -65961,9 +66020,11 @@ async function main()
         state.compressorParameters.compressionQualityWEBP = 80.0;
 
         state.compressorParameters.compressionEncoding = "UASTC";
+        state.compressorParameters.compressionUASTC_Rdo_Algorithm = "Zstd";
 
         state.compressorParameters.compressionUASTC_Flags = "DEFAULT";
         state.compressorParameters.compressionUASTC_Rdo = false;
+        state.compressorParameters.compressionUASTC_Rdo_Level = 18;
         state.compressorParameters.compressionUASTC_Rdo_QualityScalar = 1.0;
         state.compressorParameters.compressionUASTC_Rdo_DictionarySize = 4096;
         state.compressorParameters.compressionUASTC_Rdo_MaxSmoothBlockErrorScale = 10.0;
@@ -66159,6 +66220,10 @@ async function main()
         past.height = canvas.height;
         
         if (redraw) {
+
+            const imageSlider = document.getElementById('imageSlider');
+            if(imageSlider !== null)
+                imageSlider.firstChild.childNodes[5].firstChild.childNodes[1].firstChild.style.height = canvas.height + "px";
             view.renderFrame(state, canvas.width, canvas.height);
             redraw = false;
         }

@@ -15803,8 +15803,20 @@ div .field.has-addons {
   width: auto;
 }
 
-.b-slider-tick-label {
-  margin-top: 8px;
+.b-slider.comparisonImageSlider .b-slider-track {
+  height: 0px;
+}
+
+.b-slider .b-slider-tick-label {
+  width: max-content;
+}
+
+.b-slider .b-slider-tick {
+  background: none;
+}
+
+.b-slider.comparisonImageSlider .b-slider-thumb {
+  width: 2px;
 }
 
 .b-slider.iblIntensitySlider {
@@ -15816,9 +15828,9 @@ div .field.has-addons {
 
 .b-slider.comparisonImageSlider {
   position: relative;
-  bottom: 5%;
-  left: 2.5%;
-  width: 95%;
+  bottom: 50%;
+  width: 100%;
+  z-index: 999;
 }
 
 /* buttons */
