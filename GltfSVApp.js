@@ -3536,6 +3536,9 @@ class ImagePreviewRenderer
         }
         gl.bindSampler(0, this.sampler);
 
+        const linearColor_loc = gl.getUniformLocation(shader.program,"u_linearColor");
+        gl.uniform1i(linearColor_loc, info.linear);
+
         // fullscreen triangle
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -3576,7 +3579,7 @@ var cubemapFragShader = "precision highp float;\n#define GLSLIFY 1\n\n#include <
 
 var fullscreenShader$1 = "precision highp float;\n#define GLSLIFY 1\n\nout vec2 texCoord;\n\nvoid main(void) \n{\n    float x = float((gl_VertexID & 1) << 2);\n    float y = float((gl_VertexID & 2) << 1);\n    texCoord.x = x * 0.5;\n    texCoord.y = y * 0.5;\n    gl_Position = vec4(x - 1.0, y - 1.0, 0, 1);\n}"; // eslint-disable-line
 
-var previewShader = "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D u_previewTexture;\nuniform vec4 u_zoom;\n\nin vec2 texCoord;\n\nout vec4 g_finalColor;\n\nvoid main()\n{\n    float left = u_zoom.x;\n    float right = u_zoom.y;\n    float top = u_zoom.z;\n    float bottom = u_zoom.w;\n\n    float u =  (right - left) * texCoord.x + left;\n    float v =  (top - bottom) * texCoord.y + bottom;\n\n    vec4 color = texture(u_previewTexture, vec2(u,v));\n    //vec4 color = texture(u_previewTexture, texCoord);\n\n    g_finalColor = color;\n}\n"; // eslint-disable-line
+var previewShader = "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D u_previewTexture;\nuniform vec4 u_zoom;\nuniform bool u_linearColor;\n\nin vec2 texCoord;\n\nout vec4 g_finalColor;\n\nconst float GAMMA = 2.2;\nconst float INV_GAMMA = 1.0 / GAMMA;\n\n// linear to sRGB approximation\n// see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html\nvec3 linearTosRGB(vec3 color)\n{\n    return pow(color, vec3(INV_GAMMA));\n}\n\nvoid main()\n{\n    float left = u_zoom.x;\n    float right = u_zoom.y;\n    float top = u_zoom.z;\n    float bottom = u_zoom.w;\n\n    float u =  (right - left) * texCoord.x + left;\n    float v =  (top - bottom) * texCoord.y + bottom;\n\n    vec4 color = texture(u_previewTexture, vec2(u,1.0 - v));\n    //vec4 color = texture(u_previewTexture, texCoord);\n    \n    if(u_linearColor)\n    {\n        g_finalColor = color;\n    }\n    else\n    {\n        g_finalColor = vec4(linearTosRGB(color.rgb), color.a);\n    }  \n}\n"; // eslint-disable-line
 
 class gltfLight extends GltfObject
 {
@@ -19294,11 +19297,13 @@ class gltfImage extends GltfObject
         // GSV-KTX (non gltf)
         this.fileSize = 0;
         this.gpuSize = 0;
+        this.gpuFormat = "RGBA8888";
         this.thumbnail = undefined;
         this.imageType = ImageType.COLOR;
         this.imageUsage = new Set();
         this.compressedFileSize = 0;
         this.compressedGpuSize = 0;        
+        this.compressedGpuFormat = "RGBA8888";
         this.compressedMimeType = mimeType;
         this.compressedImage = undefined;
         //this.compressedImageBlob = undefined;
@@ -19370,6 +19375,7 @@ class gltfImage extends GltfObject
                 this.image = await gltf.ktxDecoder.loadKtxFromBuffer(new Uint8Array(array));
                 this.fileSize = array.byteLength;
                 this.gpuSize = this.image.gpuSize;
+                this.gpuFormat = this.image.gpuFormat;
 
                 // Compressed image (just a copy of original)
                 this.compressedMimeType = ImageMimeType.KTX2;
@@ -19377,13 +19383,14 @@ class gltfImage extends GltfObject
                 this.compressedImageTypedArrayBuffer = new Uint8Array(array);
                 this.compressedFileSize = this.fileSize;
                 this.compressedGpuSize = this.compressedImage.gpuSize;
+                this.compressedGpuFormat = this.compressedImage.gpuFormat;
                 this.compressedTextureNeedUpdate = true;
 
                 // thumbnail
                 const gl = GL;
                 const downscaled_width = Math.min(this.image.width, 98);
                 const downscaled_height = Math.min(this.image.height, 98);
-                const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.imageType === ImageType.COLOR);
+                const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.image.isSRGB);
                 const image_data = new ImageData(raw_data, downscaled_width, downscaled_height);
                 const canvas    = document.createElement("canvas");
                 const context   = canvas.getContext("2d");
@@ -19421,6 +19428,7 @@ class gltfImage extends GltfObject
             });
             this.gpuSize = this.image.width * this.image.height * 4;
             this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+            this.gpuFormat = "RGBA8888";
 
             // Compressed image (just a copy of original)
             this.compressedMimeType = this.mimeType;
@@ -19430,6 +19438,7 @@ class gltfImage extends GltfObject
             this.compressedImageTypedArrayBuffer = new Uint8Array(await blob.arrayBuffer());
             this.compressedFileSize = this.fileSize;
             this.compressedGpuSize = this.gpuSize;
+            this.compressedGpuFormat = this.gpuFormat;
             this.compressedTextureNeedUpdate = true;
 
             // thumbnail
@@ -19445,12 +19454,14 @@ class gltfImage extends GltfObject
             this.fileSize = this.uri.byteLength;
             this.gpuSize = this.image.width * this.image.height * 4;
             this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+            this.gpuFormat = "RGBA8888";
 
             // compressed image
             this.compressedImage = {width: this.image.width, height: this.image.height, data: new Uint8Array(this.image.data)};
             this.compressedImageTypedArrayBuffer = new Uint8Array(this.uri);
             this.compressedFileSize = this.fileSize;
             this.compressedGpuSize = this.gpuSize;
+            this.compressedGpuFormat = this.gpuFormat;
             this.compressedTextureNeedUpdate = true;
 
             // thumbnail
@@ -19464,6 +19475,7 @@ class gltfImage extends GltfObject
             this.fileSize = this.uri.byteLength;
             this.gpuSize = this.image.width * this.image.height * 4; // images are stored as RGBA in GPU
             this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+            this.gpuFormat = "RGBA8888";
 
             // compressed image
             this.compressedImage = {
@@ -19476,6 +19488,7 @@ class gltfImage extends GltfObject
             this.compressedImageTypedArrayBuffer = new Uint8Array(this.uri);
             this.compressedFileSize = this.fileSize;
             this.compressedGpuSize = this.gpuSize;
+            this.compressedGpuFormat = this.gpuFormat;
             this.compressedTextureNeedUpdate = true;
 
             // thumbnail
@@ -19492,6 +19505,7 @@ class gltfImage extends GltfObject
                 this.fileSize = array.byteLength;
                 this.gpuSize = this.image.width * this.image.height * 4;
                 this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+                this.gpuFormat = "RGBA8888";
 
                 // Compressed image (just a copy of original)
                 this.compressedMimeType = ImageMimeType.WEBP;
@@ -19499,6 +19513,7 @@ class gltfImage extends GltfObject
                 this.compressedImageTypedArrayBuffer = new Uint8Array(array);
                 this.compressedFileSize = this.fileSize;
                 this.compressedGpuSize = this.gpuSize;
+                this.compressedGpuFormat = this.gpuFormat;
                 this.compressedTextureNeedUpdate = true;
 
                 // thumbnail
@@ -19541,6 +19556,7 @@ class gltfImage extends GltfObject
                 this.image = await gltf.ktxDecoder.loadKtxFromBuffer(array);
                 this.fileSize = array.byteLength;
                 this.gpuSize = this.image.gpuSize;
+                this.gpuFormat = this.image.gpuFormat;
 
                 // Compressed image (just a copy of original)
                 this.compressedMimeType = ImageMimeType.KTX2;
@@ -19548,13 +19564,14 @@ class gltfImage extends GltfObject
                 this.compressedImageTypedArrayBuffer = array;
                 this.compressedFileSize = this.fileSize;
                 this.compressedGpuSize = this.compressedImage.gpuSize;
+                this.compressedGpuFormat = this.compressedImage.gpuFormat;
                 this.compressedTextureNeedUpdate = true;
 
                 // thumbnail
                 const gl = GL;
                 const downscaled_width = Math.min(this.image.width, 98);
                 const downscaled_height = Math.min(this.image.height, 98);
-                const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.imageType === ImageType.COLOR);
+                const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.image.isSRGB);
                 const image_data = new ImageData(raw_data, downscaled_width, downscaled_height);
                 const canvas    = document.createElement("canvas");
                 const context   = canvas.getContext("2d");
@@ -19589,6 +19606,7 @@ class gltfImage extends GltfObject
             });
             this.gpuSize = this.image.width * this.image.height * 4;
             this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+            this.gpuFormat = "RGBA8888";
 
             // Compressed image (just a copy of original)
             this.compressedImage = await gltfImage.loadHTMLImage(objectURL).catch( (error) => {
@@ -19596,6 +19614,7 @@ class gltfImage extends GltfObject
             });         
             this.compressedImageTypedArrayBuffer = new Uint8Array(array);   
             this.compressedGpuSize = this.gpuSize;
+            this.compressedGpuFormat = this.gpuFormat;
             this.compressedTextureNeedUpdate = true;
 
             // thumbnail
@@ -19610,11 +19629,13 @@ class gltfImage extends GltfObject
             this.image = jpegJs.decode(array, {useTArray: true});
             this.gpuSize = this.image.width * this.image.height * 4;
             this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
-            
+            this.gpuFormat = "RGBA8888";
+
             // compressed image
             this.compressedImage = {width: this.image.width, height: this.image.height, data: new Uint8Array(this.image.data)};
             this.compressedImageTypedArrayBuffer = new Uint8Array(array);
             this.compressedGpuSize = this.gpuSize;
+            this.compressedGpuFormat = this.gpuFormat;
             this.compressedTextureNeedUpdate = true;
 
             // thumbnail
@@ -19627,6 +19648,7 @@ class gltfImage extends GltfObject
             this.image = decodePNG(array);
             this.gpuSize = this.image.width * this.image.height * 4;
             this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+            this.gpuFormat = "RGBA8888";
 
             // compressed image
             this.compressedImage = {
@@ -19637,6 +19659,7 @@ class gltfImage extends GltfObject
                 channels: this.image.channels
             };
             this.compressedGpuSize = this.gpuSize;
+            this.compressedGpuFormat = this.gpuFormat;
             this.compressedImageTypedArrayBuffer = new Uint8Array(array);
             this.compressedTextureNeedUpdate = true;
 
@@ -19653,6 +19676,7 @@ class gltfImage extends GltfObject
                 this.fileSize = array.byteLength;
                 this.gpuSize = this.image.width * this.image.height * 4;
                 this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+                this.gpuFormat = "RGBA8888";
 
                 // Compressed image (just a copy of original)
                 this.compressedMimeType = ImageMimeType.WEBP;
@@ -19660,6 +19684,7 @@ class gltfImage extends GltfObject
                 this.compressedImageTypedArrayBuffer = new Uint8Array(array);
                 this.compressedFileSize = this.fileSize;
                 this.compressedGpuSize = this.gpuSize;
+                this.compressedGpuFormat = this.gpuFormat;
                 this.compressedTextureNeedUpdate = true;
 
                 // thumbnail
@@ -19681,7 +19706,6 @@ class gltfImage extends GltfObject
         return true;
     }
 
-    // TODO:
     async setImageFromFiles(files, gltf)
     {
         if (this.uri === undefined || files === undefined)
@@ -19713,6 +19737,41 @@ class gltfImage extends GltfObject
             {
                 const data = new Uint8Array(await foundFile.arrayBuffer());
                 this.image = await gltf.ktxDecoder.loadKtxFromBuffer(data);
+                this.gpuSize = this.image.gpuSize;
+                this.gpuFormat = this.image.gpuFormat;
+
+                // Compressed image (just a copy of original)
+                this.compressedImage = await gltf.ktxDecoder.loadKtxFromBuffer(data);
+                this.compressedImageTypedArrayBuffer = data;
+                this.compressedFileSize = this.fileSize;
+                this.compressedGpuSize = this.compressedImage.gpuSize;
+                this.compressedGpuFormat = this.compressedImage.gpuFormat;
+                this.compressedTextureNeedUpdate = true;
+
+                // thumbnail
+                const gl = GL;
+                const downscaled_width = Math.min(this.image.width, 98);
+                const downscaled_height = Math.min(this.image.height, 98);
+                const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.image.isSRGB);
+                const image_data = new ImageData(raw_data, downscaled_width, downscaled_height);
+                const canvas    = document.createElement("canvas");
+                const context   = canvas.getContext("2d");
+                canvas.height = downscaled_height;
+                canvas.width  = downscaled_width;
+                context.putImageData(image_data, 0, 0);
+                this.thumbnail = new Image(downscaled_width, downscaled_height);
+                canvas.toBlob(
+                    (blob) => {
+                        const url = URL.createObjectURL(blob);
+                      
+                        this.thumbnail.onload = () => {
+                          URL.revokeObjectURL(url); // clean up this blob
+                        };                      
+                        this.thumbnail.src = url;
+                    },
+                    "image/jpeg",
+                    0.8
+                );
             }
             else
             {
@@ -19728,6 +19787,23 @@ class gltfImage extends GltfObject
                 console.error("Could not create image from FileReader image data");
             });
             this.gpuSize = this.image.width * this.image.height * 4;
+            this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+            this.gpuFormat = "RGBA8888";
+
+            const blob = new Blob([imageData], { "type": this.mimeType });
+            // Compressed image (just a copy of original)
+            this.compressedImage = await gltfImage.loadHTMLImage(imageData).catch( (error) => {
+                console.error(error);
+            });         
+            this.compressedImageTypedArrayBuffer = new Uint8Array(await blob.arrayBuffer());  
+            this.compressedGpuSize = this.gpuSize;
+            this.compressedGpuFormat = this.gpuFormat;
+            this.compressedTextureNeedUpdate = true;
+
+            // thumbnail
+            this.thumbnail = await gltfImage.loadHTMLImage(imageData).catch( (error) => {
+                console.error(error);
+            });
         }
         else if(this.mimeType === ImageMimeType.WEBP)
         {
@@ -19735,6 +19811,23 @@ class gltfImage extends GltfObject
             {
                 const data = new Uint8Array(await foundFile.arrayBuffer());
                 this.image = await gltf.webpLibrary.loadWebpFromBuffer(data);
+                this.gpuSize = this.image.width * this.image.height * 4;
+                this.gpuSize = Math.floor(this.gpuSize * 4 / 3 );
+                this.gpuFormat = "RGBA8888";
+
+                // Compressed image (just a copy of original)
+                this.compressedMimeType = ImageMimeType.WEBP;
+                this.compressedImage = await gltf.webpLibrary.decode(data);
+                this.compressedImageTypedArrayBuffer = new Uint8Array(data);
+                this.compressedFileSize = this.fileSize;
+                this.compressedGpuSize = this.gpuSize;
+                this.compressedGpuFormat = this.gpuFormat;
+                this.compressedTextureNeedUpdate = true;
+
+                // thumbnail
+                const image_data = new ImageData(this.image.data, this.image.width, this.image.height);
+                this.thumbnail = new Image(this.image.width, this.image.height);
+                ImageUtils.ImageDataToImg(image_data, this.thumbnail);
             }
             else
             {
@@ -19792,6 +19885,7 @@ class gltfImage extends GltfObject
                 this.compressedImageTypedArrayBuffer = data;
                 this.compressedFileSize = data.byteLength;
                 this.compressedGpuSize = this.compressedImage.gpuSize;
+                this.compressedGpuFormat = this.compressedImage.gpuFormat;
                 this.compressedMimeType = ImageMimeType.KTX2;
                 this.compressedTextureNeedUpdate = true;
 
@@ -19817,6 +19911,7 @@ class gltfImage extends GltfObject
             this.compressedFileSize = blob.size;
             this.compressedGpuSize = width * height * 4;
             this.compressedGpuSize = Math.floor(this.compressedGpuSize * 4 / 3 );
+            this.compressedGpuFormat = "RGBA8888";
             this.compressedMimeType = ImageMimeType.JPEG;
             this.compressedTextureNeedUpdate = true;
             URL.revokeObjectURL(objectURL);
@@ -19836,6 +19931,7 @@ class gltfImage extends GltfObject
             this.compressedFileSize = blob.size;
             this.compressedGpuSize = width * height * 4;
             this.compressedGpuSize = Math.floor(this.compressedGpuSize * 4 / 3 );
+            this.compressedGpuFormat = "RGBA8888";
             this.compressedMimeType = ImageMimeType.PNG;
             this.compressedTextureNeedUpdate = true;
             URL.revokeObjectURL(objectURL);
@@ -19862,6 +19958,7 @@ class gltfImage extends GltfObject
             this.compressedFileSize = blob.size;
             this.compressedGpuSize = width * height * 4;
             this.compressedGpuSize = Math.floor(this.compressedGpuSize * 4 / 3 );
+            this.compressedGpuFormat = "RGBA8888";
             this.compressedMimeType = ImageMimeType.WEBP;
             this.compressedTextureNeedUpdate = true;
             URL.revokeObjectURL(objectURL);
@@ -23057,6 +23154,13 @@ class KtxDecoder {
         else return this.libktx.UastcFlags.LEVEL_DEFAULT.value; 
     }
 
+    stringToSupercmpScheme(s) {
+        if (s === 'Zstd') return this.libktx.SupercmpScheme.ZSTD;
+        else if (s === 'Zlib') return this.libktx.SupercmpScheme.ZLIB;
+        else if (s === 'BasisLZ') return this.libktx.SupercmpScheme.BASIS_LZ;
+        else return this.libktx.SupercmpScheme.NONE;
+    }
+
     transcodeRGBA(ktexture) {
         if (!ktexture.needsTranscoding) {
             return;
@@ -23068,6 +23172,7 @@ class KtxDecoder {
     }
 
     transcode(ktexture) {
+        ktexture.gpuFormat = "RGBA8888";
         if (ktexture.needsTranscoding) {
             let format;
 
@@ -23086,17 +23191,24 @@ class KtxDecoder {
 
             if (astcSupported) {
                 format = this.libktx.TranscodeTarget.ASTC_4x4_RGBA;
+                ktexture.gpuFormat = "ASTC_4x4_RGBA";
             } else if (bptcSupported) {
                 format = this.libktx.TranscodeTarget.BC7_RGBA;
+                ktexture.gpuFormat = "BC7_RGBA";
             } else if (dxtSupported) {
                 format = this.libktx.TranscodeTarget.BC1_OR_3;
+                ktexture.gpuFormat = "BC1_OR_3";
             } else if (pvrtcSupported) {
                 format = this.libktx.TranscodeTarget.PVRTC1_4_RGBA;
+                ktexture.gpuFormat = "PVRTC1_4_RGBA";
             } else if (etcSupported) {
                 format = this.libktx.TranscodeTarget.ETC;
+                ktexture.gpuFormat = "ETC";
             } else {
                 format = this.libktx.TranscodeTarget.RGBA8888;
+                ktexture.gpuFormat = "RGBA8888";
             }
+           
             if (ktexture.transcodeBasis(format, 0) != this.libktx.ErrorCode.SUCCESS) {
                 console.warn('Texture transcode failed. See console for details.');
             }
@@ -23120,6 +23232,9 @@ class KtxDecoder {
         uploadResult.texture.width = texture.baseWidth;
         uploadResult.texture.height = texture.baseHeight;
         uploadResult.texture.gpuSize = texture.dataSize;
+        uploadResult.texture.gpuFormat = texture.gpuFormat;
+        uploadResult.texture.isSRGB = texture.isSRGB;
+        
         return uploadResult.texture;
     }
 
@@ -23138,6 +23253,9 @@ class KtxDecoder {
         uploadResult.texture.width = texture.baseWidth;
         uploadResult.texture.height = texture.baseHeight;
         uploadResult.texture.gpuSize = texture.dataSize;
+        uploadResult.texture.gpuFormat = texture.gpuFormat;
+        uploadResult.texture.isSRGB = texture.isSRGB;
+       
         return uploadResult.texture;
     }
 
@@ -23153,8 +23271,14 @@ class KtxDecoder {
             basisu_options.compressionLevel = 2;
             options.basisu_options = basisu_options;
         }
+        if (!options.hasOwnProperty('compression_level')) {
+            options.compression_level = 18;
+        }
+        if (!options.hasOwnProperty('supercmp_scheme')) {
+            options.supercmp_scheme = this.libktx.SupercmpScheme.NONE;
+        }   
 
-        const result = texture.compressBasisU(options.basisu_options);
+        const result = texture.compressBasisU(options.basisu_options, options.supercmp_scheme, options.compression_level);
         const encoded_data = Uint8ClampedArray.from(result);
         return encoded_data;
     }
@@ -24038,11 +24162,13 @@ class GltfView
                 name: name, 
                 type: element.imageType,
                 usage: Array.from(element.imageUsage).join(", "),
-                format: element.mimeType.replace("image/", ""), 
+                format: element.mimeType.replace("image/", ""),
+                gpuformat: element.gpuFormat, 
                 resolution:  element.image.width + "x" + element.image.height, 
                 diskSize: fileSize.toFixed(2) + "mb", 
                 gpuSize: toMb(element.gpuSize).toFixed(2) + "mb", 
                 formatCompressed: "", 
+                gpuformatCompressed: "", 
                 resolutionCompressed: "",
                 diskSizeCompressed: "", 
                 gpuSizeCompressed: "",
@@ -24110,15 +24236,31 @@ class GltfView
                 type: element.imageType,
                 usage: Array.from(element.imageUsage).join(", "),
                 format: element.mimeType.replace("image/", ""), 
+                gpuformat: element.gpuFormat, 
                 resolution:  element.image.width + "x" + element.image.height, 
                 diskSize: fileSize.toFixed(2) + "mb", 
                 gpuSize: toMb(element.gpuSize).toFixed(2) + "mb", 
                 formatCompressed: isIncluded ? element.compressedMimeType.replace("image/", "") : "", 
+                gpuformatCompressed: isIncluded ?  element.compressedGpuFormat : "", 
                 resolutionCompressed: isIncluded ? element.compressedImage.width + "x" + element.compressedImage.height : "",
                 diskSizeCompressed: isIncluded ? fileSizeCompressed.toFixed(2) + "mb" : "",  
                 gpuSizeCompressed: isIncluded ? toMb(element.compressedGpuSize).toFixed(2) + "mb" : "", 
                 isCompleted: isIncluded
             };
+
+            if(texture.formatCompressed === "ktx2")
+            {
+                texture.formatCompressed += " + " + state.compressorParameters.compressionEncoding;
+                if(state.compressorParameters.compressionEncoding === "UASTC")
+                {
+                    if(state.compressorParameters.compressionUASTC_Rdo)
+                        texture.formatCompressed += " + RDO";
+                    texture.formatCompressed += " + " + state.compressorParameters.compressionUASTC_Rdo_Algorithm; 
+                }
+                else {
+                    texture.formatCompressed += " + BasisLZ";
+                }
+            }
 
             textures.push(texture);
             texturesFileSize += isIncluded ? fileSizeCompressed : fileSize;
@@ -27034,28 +27176,7 @@ class UIModel
     updateSlider(index, previewMode)
     {
         this.app.compressionBefore = (previewMode === GltfState.CompressionComparison.PREVIEW_2D) ? 'Before\n (' + this.app.texturesStatistics[index].format + ')' : "Before";
-
-        this.app.compressionAfter  = "After";
-        if(previewMode === GltfState.CompressionComparison.PREVIEW_2D)
-        {
-            this.app.compressionAfter = 'After\n ('  + this.app.texturesStatistics[index].formatCompressed;
-
-            if(this.app.texturesStatistics[index].formatCompressed == "ktx2")
-            {
-                this.app.compressionAfter += " + " + this.app.selectedCompressionEncoding;
-                if(this.app.selectedCompressionEncoding === "UASTC")
-                {
-                    if(this.app.selectedCompressionUASTC_Rdo)
-                        this.app.compressionAfter += " + RDO";
-                    this.app.compressionAfter += " + " + this.app.selectedCompressionUASTC_Rdo_Algorithm; 
-                }
-                else {
-                    this.app.compressionAfter += " + BasisLZ";
-                }
-            }
-
-            this.app.compressionAfter += ')';
-        }
+        this.app.compressionAfter  = (previewMode === GltfState.CompressionComparison.PREVIEW_2D) ? 'After\n ('  + this.app.texturesStatistics[index].formatCompressed + ')' : "After";
     }
 
     updateImageSlider(value)
@@ -65609,8 +65730,8 @@ async function main()
             const targetKTX2_encoding = state.compressorParameters.compressionEncoding;
             const targetKTX2_UASTC_flags = state.compressorParameters.compressionUASTC_Flags;
             const targetKTX2_UASTC_RDO = state.compressorParameters.compressionUASTC_Rdo;
-            state.compressorParameters.compressionUASTC_Rdo_Algorithm;
-            state.compressorParameters.compressionUASTC_Rdo_Level; 
+            const targetKTX2_UASTC_RDO_algorithm = state.compressorParameters.compressionUASTC_Rdo_Algorithm;
+            const targetKTX2_UASTC_RDO_level = state.compressorParameters.compressionUASTC_Rdo_Level; 
             const targetKTX2_UASTC_RDO_quality = state.compressorParameters.compressionUASTC_Rdo_QualityScalar;
             const targetKTX2_UASTC_RDO_dictionarySize = state.compressorParameters.compressionUASTC_Rdo_DictionarySize;
             const targetKTX2_UASTC_RDO_maxSmoothBlockErrorScale = state.compressorParameters.compressionUASTC_Rdo_MaxSmoothBlockErrorScale;
@@ -65642,7 +65763,7 @@ async function main()
             basisu_options.noEndpointRDO = targetKTX2_ETC1S_noEndpointRdo;
             basisu_options.noSelectorRDO = targetKTX2_ETC1S_noSelectorRdo;
 
-            basisu_options.uastcFlags =  state.gltf.ktxEncoder.stringToUastcFlags(targetKTX2_UASTC_flags);
+            basisu_options.uastcFlags = state.gltf.ktxEncoder.stringToUastcFlags(targetKTX2_UASTC_flags);
             basisu_options.uastcRDO = targetKTX2_UASTC_RDO;
             basisu_options.uastcRDOQualityScalar = targetKTX2_UASTC_RDO_quality;
             basisu_options.uastcRDODictSize = targetKTX2_UASTC_RDO_dictionarySize;
@@ -65650,6 +65771,11 @@ async function main()
             basisu_options.uastcRDOMaxSmoothBlockStdDev = targetKTX2_UASTC_RDO_maxSmoothBlockStandardDeviation;
             basisu_options.uastcRDODontFavorSimplerModes = targetKTX2_UASTC_RDO_donotFavorSimplerModes;
             
+            if (basisu_options.uastc && targetKTX2_UASTC_RDO) {
+                options.supercmp_scheme = state.gltf.ktxEncoder.stringToSupercmpScheme(targetKTX2_UASTC_RDO_algorithm);
+                options.compression_level = targetKTX2_UASTC_RDO_level;
+            }
+
             options.basisu_options = basisu_options;
         }
         else if(state.compressorParameters.compressionType === "JPEG"){

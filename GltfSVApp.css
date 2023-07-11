@@ -15984,6 +15984,7 @@ input[type=checkbox]:checked:after {
   top: 30px;
   bottom: 0;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  background: black;
 }
 
 .container table {
