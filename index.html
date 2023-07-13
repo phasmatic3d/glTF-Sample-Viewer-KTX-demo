@@ -492,41 +492,45 @@
                                                         <b-slider-tick :value="22" class="iblIntensitySliderMarker">22</b-slider-tick>                               
                                                     </b-slider>
                                                 </b-field>
+
+                                                <b-field label="RDO Settings" class="smallerLabel">
                                                 
-                                                <b-field label="Quality Scalar" class="smallerLabel">
-                                                    <b-slider rounded v-model="selectedCompressionUASTC_Rdo_QualityScalar" :min="0.001" v-bind:max="50.0" :step=0.01
-                                                        class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_QualityScalarChanged$">
-                                                        <b-slider-tick :value="0.001" class="iblIntensitySliderMarker">0.001</b-slider-tick> 
-                                                        <b-slider-tick :value="50.0" class="iblIntensitySliderMarker">50</b-slider-tick>                               
-                                                    </b-slider>
-                                                </b-field>
+                                                    <b-field label="Quality Scalar" class="smallerLabel">
+                                                        <b-slider rounded v-model="selectedCompressionUASTC_Rdo_QualityScalar" :min="0.001" v-bind:max="50.0" :step=0.01
+                                                            class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_QualityScalarChanged$">
+                                                            <b-slider-tick :value="0.001" class="iblIntensitySliderMarker">0.001</b-slider-tick> 
+                                                            <b-slider-tick :value="50.0" class="iblIntensitySliderMarker">50</b-slider-tick>                               
+                                                        </b-slider>
+                                                    </b-field>
 
-                                                <b-field label="Dictionary Size" class="smallerLabel">
-                                                    <b-slider rounded v-model="selectedCompressionUASTC_Rdo_DictionarySize" :min="64" v-bind:max="65536" :step=1
-                                                        class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_DictionarySizeChanged$">
-                                                        <b-slider-tick :value="64" class="iblIntensitySliderMarker">64</b-slider-tick> 
-                                                        <b-slider-tick :value="65536" class="iblIntensitySliderMarker">65536</b-slider-tick>                               
-                                                    </b-slider>
-                                                </b-field>
+                                                    <b-field label="Dictionary Size" class="smallerLabel">
+                                                        <b-slider rounded v-model="selectedCompressionUASTC_Rdo_DictionarySize" :min="64" v-bind:max="65536" :step=1
+                                                            class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_DictionarySizeChanged$">
+                                                            <b-slider-tick :value="64" class="iblIntensitySliderMarker">64</b-slider-tick> 
+                                                            <b-slider-tick :value="65536" class="iblIntensitySliderMarker">65536</b-slider-tick>                               
+                                                        </b-slider>
+                                                    </b-field>
 
-                                                <b-field label="Max Smooth Block Error Scale" class="smallerLabel">
-                                                    <b-slider rounded v-model="selectedCompressionUASTC_Rdo_MaxSmoothBlockErrorScale" :min="1.0" v-bind:max="300.0" :step=0.1
-                                                        class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_MaxSmoothBlockErrorScaleChanged$">
-                                                        <b-slider-tick :value="1.0" class="iblIntensitySliderMarker">1</b-slider-tick> 
-                                                        <b-slider-tick :value="300.0" class="iblIntensitySliderMarker">300</b-slider-tick>                               
-                                                    </b-slider>
-                                                </b-field>
+                                                    <b-field label="Max Smooth Block Error Scale" class="smallerLabel">
+                                                        <b-slider rounded v-model="selectedCompressionUASTC_Rdo_MaxSmoothBlockErrorScale" :min="1.0" v-bind:max="300.0" :step=0.1
+                                                            class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_MaxSmoothBlockErrorScaleChanged$">
+                                                            <b-slider-tick :value="1.0" class="iblIntensitySliderMarker">1</b-slider-tick> 
+                                                            <b-slider-tick :value="300.0" class="iblIntensitySliderMarker">300</b-slider-tick>                               
+                                                        </b-slider>
+                                                    </b-field>
 
-                                                <b-field label="Max Smooth Block Standard Deviation" class="smallerLabel">
-                                                    <b-slider rounded v-model="selectedCompressionUASTC_Rdo_MaxSmoothBlockStandardDeviation" :min="0.01" v-bind:max="65536.0" :step=0.01
-                                                        class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_MaxSmoothBlockStandardDeviationChanged$">
-                                                        <b-slider-tick :value="0.01" class="iblIntensitySliderMarker">0.01</b-slider-tick> 
-                                                        <b-slider-tick :value="65536.0" class="iblIntensitySliderMarker">65536</b-slider-tick>                               
-                                                    </b-slider>
-                                                </b-field>
+                                                    <b-field label="Max Smooth Block Standard Deviation" class="smallerLabel">
+                                                        <b-slider rounded v-model="selectedCompressionUASTC_Rdo_MaxSmoothBlockStandardDeviation" :min="0.01" v-bind:max="65536.0" :step=0.01
+                                                            class="iblIntensitySlider" v-stream:input="compressionUASTC_Rdo_MaxSmoothBlockStandardDeviationChanged$">
+                                                            <b-slider-tick :value="0.01" class="iblIntensitySliderMarker">0.01</b-slider-tick> 
+                                                            <b-slider-tick :value="65536.0" class="iblIntensitySliderMarker">65536</b-slider-tick>                               
+                                                        </b-slider>
+                                                    </b-field>
 
-                                                <b-switch v-model="selectedCompressionUASTC_Rdo_DonotFavorSimplerModes" v-stream:input="compressedUASTC_Rdo_DonotFavorSimplerModesChanged$">Do not favor simpler modes
-                                                </b-switch>
+                                                    <b-switch v-model="selectedCompressionUASTC_Rdo_DonotFavorSimplerModes" v-stream:input="compressedUASTC_Rdo_DonotFavorSimplerModesChanged$">Do not favor simpler modes
+                                                    </b-switch>
+
+                                                </b-field>
                                             </div>    
                                         </b-field>
                                     </div>
