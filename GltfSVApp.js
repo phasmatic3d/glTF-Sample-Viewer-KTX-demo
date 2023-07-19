@@ -3508,6 +3508,7 @@ class ImagePreviewRenderer
         {
             return;
         }
+        const aspectRatio = state._view.context.drawingBufferWidth / state._view.context.drawingBufferHeight;
 
         const gl = webGl.context;
 
@@ -3538,6 +3539,8 @@ class ImagePreviewRenderer
 
         const linearColor_loc = gl.getUniformLocation(shader.program,"u_linearColor");
         gl.uniform1i(linearColor_loc, info.linear);
+        const aspectRatio_loc = gl.getUniformLocation(shader.program,"u_aspectRatio");
+        gl.uniform1f(aspectRatio_loc, aspectRatio);
 
         // fullscreen triangle
         gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -3579,7 +3582,7 @@ var cubemapFragShader = "precision highp float;\n#define GLSLIFY 1\n\n#include <
 
 var fullscreenShader$1 = "precision highp float;\n#define GLSLIFY 1\n\nout vec2 texCoord;\n\nvoid main(void) \n{\n    float x = float((gl_VertexID & 1) << 2);\n    float y = float((gl_VertexID & 2) << 1);\n    texCoord.x = x * 0.5;\n    texCoord.y = y * 0.5;\n    gl_Position = vec4(x - 1.0, y - 1.0, 0, 1);\n}"; // eslint-disable-line
 
-var previewShader = "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D u_previewTexture;\nuniform vec4 u_zoom;\nuniform bool u_linearColor;\n\nin vec2 texCoord;\n\nout vec4 g_finalColor;\n\nconst float GAMMA = 2.2;\nconst float INV_GAMMA = 1.0 / GAMMA;\n\n// linear to sRGB approximation\n// see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html\nvec3 linearTosRGB(vec3 color)\n{\n    return pow(color, vec3(INV_GAMMA));\n}\n\nvoid main()\n{\n    float left = u_zoom.x;\n    float right = u_zoom.y;\n    float top = u_zoom.z;\n    float bottom = u_zoom.w;\n\n    float u =  (right - left) * texCoord.x + left;\n    float v =  (top - bottom) * texCoord.y + bottom;\n\n    vec4 color = texture(u_previewTexture, vec2(u,1.0 - v));\n    //vec4 color = texture(u_previewTexture, texCoord);\n    \n    if(u_linearColor)\n    {\n        g_finalColor = color;\n    }\n    else\n    {\n        g_finalColor = vec4(linearTosRGB(color.rgb), color.a);\n    }  \n}\n"; // eslint-disable-line
+var previewShader = "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D u_previewTexture;\nuniform vec4 u_zoom;\nuniform bool u_linearColor;\nuniform float u_aspectRatio;\n\nin vec2 texCoord;\n\nout vec4 g_finalColor;\n\nconst float GAMMA = 2.2;\nconst float INV_GAMMA = 1.0 / GAMMA;\n\n// linear to sRGB approximation\n// see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html\nvec3 linearTosRGB(vec3 color)\n{\n    return pow(color, vec3(INV_GAMMA));\n}\n\nvoid main()\n{\n    float left = u_zoom.x;\n    float right = u_zoom.y;\n    float top = u_zoom.z;\n    float bottom = u_zoom.w;\n\n    float u =  (right - left) * texCoord.x + left;\n    float v =  (top - bottom) * texCoord.y + bottom;\n    v = 1.0 - v;\n    if(u_aspectRatio >= 1.0)\n        u *= u_aspectRatio;\n    else\n        v /= u_aspectRatio;\n\n    vec4 color = texture(u_previewTexture, vec2(u,v));\n    //vec4 color = texture(u_previewTexture, texCoord);\n    \n    if(u_linearColor)\n    {\n        g_finalColor = color;\n    }\n    else\n    {\n        g_finalColor = vec4(linearTosRGB(color.rgb), color.a);\n    }  \n\n    if(u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0)\n    {\n        g_finalColor = vec4(0,0,0,1);\n    }\n}\n"; // eslint-disable-line
 
 class gltfLight extends GltfObject
 {
@@ -19388,7 +19391,8 @@ class gltfImage extends GltfObject
 
                 // thumbnail
                 const gl = GL;
-                const downscaled_width = Math.min(this.image.width, 98);
+                const aspect_ratio = this.image.width / this.image.height;
+                const downscaled_width = Math.min(this.image.width, 98 * aspect_ratio);
                 const downscaled_height = Math.min(this.image.height, 98);
                 const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.image.isSRGB);
                 const image_data = new ImageData(raw_data, downscaled_width, downscaled_height);
@@ -19569,7 +19573,8 @@ class gltfImage extends GltfObject
 
                 // thumbnail
                 const gl = GL;
-                const downscaled_width = Math.min(this.image.width, 98);
+                const aspect_ratio = this.image.width / this.image.height;
+                const downscaled_width = Math.min(this.image.width, 98 * aspect_ratio);
                 const downscaled_height = Math.min(this.image.height, 98);
                 const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.image.isSRGB);
                 const image_data = new ImageData(raw_data, downscaled_width, downscaled_height);
@@ -19750,7 +19755,8 @@ class gltfImage extends GltfObject
 
                 // thumbnail
                 const gl = GL;
-                const downscaled_width = Math.min(this.image.width, 98);
+                const aspect_ratio = this.image.width / this.image.height;
+                const downscaled_width = Math.min(this.image.width, 98 * aspect_ratio);
                 const downscaled_height = Math.min(this.image.height, 98);
                 const raw_data = await ImageUtils.loadImageDataGL(this.image, downscaled_width, downscaled_height, gl, this.image.isSRGB);
                 const image_data = new ImageData(raw_data, downscaled_width, downscaled_height);
